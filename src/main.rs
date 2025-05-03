@@ -11,11 +11,45 @@ use async_openai::{
     },
 };
 use futures::StreamExt;
-use std::io::{self, Write};
-use tokio;
+use std::{
+    io::{self, Write},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
+use tokio::{
+    signal::ctrl_c,
+    sync::mpsc,
+    select,
+};
+
+// Signal to control application shutdown
+static RUNNING: AtomicBool = AtomicBool::new(true);
+
+// Function to handle clean-up operations
+fn cleanup() {
+    println!("\nGoodbye! Thank you for using Rust CLI Chat.");
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Set up a channel for user input
+    let (input_sender, mut input_receiver) = mpsc::channel::<String>(10);
+    
+    // Set up Ctrl+C handler
+    let running = Arc::new(AtomicBool::new(true));
+    let running_clone = running.clone();
+    
+    // Spawn a task to handle Ctrl+C
+    tokio::spawn(async move {
+        if let Ok(()) = ctrl_c().await {
+            println!("\nReceived shutdown signal...");
+            running_clone.store(false, Ordering::SeqCst);
+            RUNNING.store(false, Ordering::SeqCst);
+        }
+    });
+    
     // Load configuration
     let config = match config::Config::new() {
         Ok(config) => config,
@@ -46,90 +80,133 @@ async fn main() -> Result<()> {
     println!();
     println!("Type your message and press Enter to chat.");
     println!("Type '/exit' to end the conversation.");
+    println!("Press Ctrl+C to quit at any time.");
     println!("===================================");
     println!();
     
-    // Chat loop
-    loop {
-        // Display prompt and flush to ensure it appears before user input
-        print!("You> ");
-        io::stdout().flush()?;
-        
-        // Read user input
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        
-        // Trim whitespace
-        let input = input.trim();
-        
-        // Check for exit command
-        if input == "/exit" {
-            println!("Goodbye! Thank you for using Rust CLI Chat.");
-            break;
-        }
-        
-        // Skip empty messages
-        if input.is_empty() {
-            continue;
-        }
-        
-        // Add user message to history
-        let user_message = ChatCompletionRequestUserMessageArgs::default()
-            .content(input)
-            .build()?;
-        conversation_history.push(user_message.into());
-        
-        // Create the chat completion request
-        let request = CreateChatCompletionRequestArgs::default()
-            .model(&config.model)
-            .messages(conversation_history.clone())
-            .stream(true)
-            .build()?;
-        
-        // Send the request and get streaming response
-        let mut stream = client.chat().create_stream(request).await?;
-        
-        // Print AI prefix
-        print!("AI> ");
-        io::stdout().flush()?;
-        
-        // Variable to collect the complete response
-        let mut full_response = String::new();
-        
-        // Process streaming response
-        while let Some(result) = stream.next().await {
-            match result {
-                Ok(response) => {
-                    // Extract the content from the response
-                    for choice in response.choices {
-                        if let Some(content) = choice.delta.content {
-                            // Print chunk immediately
-                            print!("{}", content);
-                            io::stdout().flush()?;
-                            
-                            // Add to full response
-                            full_response.push_str(&content);
-                        }
+    // Spawn a task to read user input
+    let input_task = tokio::spawn(async move {
+        loop {
+            if !RUNNING.load(Ordering::SeqCst) {
+                break;
+            }
+            
+            // Display prompt and flush to ensure it appears before user input
+            print!("You> ");
+            io::stdout().flush().unwrap();
+            
+            // Read user input (blocking operation)
+            let mut input = String::new();
+            match io::stdin().read_line(&mut input) {
+                Ok(_) => {
+                    // Trim whitespace
+                    let input = input.trim().to_string();
+                    
+                    // Check for exit command
+                    if input == "/exit" {
+                        RUNNING.store(false, Ordering::SeqCst);
+                        break;
+                    }
+                    
+                    // Skip empty messages
+                    if input.is_empty() {
+                        continue;
+                    }
+                    
+                    // Send input to the main task
+                    if let Err(_) = input_sender.send(input).await {
+                        // Channel closed, time to exit
+                        break;
                     }
                 }
-                Err(err) => {
-                    eprintln!("\nError during streaming: {}", err);
+                Err(e) => {
+                    eprintln!("Error reading input: {}", e);
+                    RUNNING.store(false, Ordering::SeqCst);
                     break;
                 }
             }
         }
-        
-        // Add AI response to conversation history
-        if !full_response.is_empty() {
-            let assistant_message = ChatCompletionRequestAssistantMessageArgs::default()
-                .content(full_response)
-                .build()?;
-            conversation_history.push(assistant_message.into());
+    });
+    
+    // Chat loop
+    while running.load(Ordering::SeqCst) {
+        // Wait for user input or Ctrl+C
+        select! {
+            Some(input) = input_receiver.recv() => {
+                // Add user message to history
+                let user_message = ChatCompletionRequestUserMessageArgs::default()
+                    .content(input)
+                    .build()?;
+                conversation_history.push(user_message.into());
+                
+                // Create the chat completion request
+                let request = CreateChatCompletionRequestArgs::default()
+                    .model(&config.model)
+                    .messages(conversation_history.clone())
+                    .stream(true)
+                    .build()?;
+                
+                // Send the request and get streaming response
+                let mut stream = client.chat().create_stream(request).await?;
+                
+                // Print AI prefix
+                print!("AI> ");
+                io::stdout().flush()?;
+                
+                // Variable to collect the complete response
+                let mut full_response = String::new();
+                
+                // Process streaming response
+                while let Some(result) = stream.next().await {
+                    // Check if we received an interrupt
+                    if !running.load(Ordering::SeqCst) {
+                        break;
+                    }
+                    
+                    match result {
+                        Ok(response) => {
+                            // Extract the content from the response
+                            for choice in response.choices {
+                                if let Some(content) = choice.delta.content {
+                                    // Print chunk immediately
+                                    print!("{}", content);
+                                    io::stdout().flush()?;
+                                    
+                                    // Add to full response
+                                    full_response.push_str(&content);
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            eprintln!("\nError during streaming: {}", err);
+                            break;
+                        }
+                    }
+                }
+                
+                // Add AI response to conversation history
+                if !full_response.is_empty() {
+                    let assistant_message = ChatCompletionRequestAssistantMessageArgs::default()
+                        .content(full_response)
+                        .build()?;
+                    conversation_history.push(assistant_message.into());
+                }
+                
+                // New line after the response
+                println!();
+            }
+            else => {
+                // Channel closed or Ctrl+C was pressed
+                break;
+            }
         }
-        
-        // New line after the response
-        println!();
     }
+    
+    // Wait for input task to complete
+    let _ = input_task.await;
+    
+    // Clean up resources
+    cleanup();
     
     Ok(())
 }
