@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use async_openai::{Client, config::OpenAIConfig};
 use std::env;
 
 pub struct Config {
@@ -29,5 +30,13 @@ impl Config {
             openai_base_url,
             model,
         })
+    }
+
+    pub fn create_openai_client(&self) -> Client<OpenAIConfig> {
+        let config = OpenAIConfig::new()
+            .with_api_key(&self.openai_api_key)
+            .with_api_base(&self.openai_base_url);
+            
+        Client::with_config(config)
     }
 }

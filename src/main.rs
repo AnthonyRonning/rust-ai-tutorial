@@ -1,8 +1,10 @@
 mod config;
 
 use anyhow::Result;
+use tokio;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     // Load configuration
     let config = match config::Config::new() {
         Ok(config) => config,
@@ -12,9 +14,22 @@ fn main() -> Result<()> {
         }
     };
 
-    println!("CLI Chat initialized successfully!");
+    // Create OpenAI client
+    let client = config.create_openai_client();
+
+    // Display welcome message
+    println!("===================================");
+    println!("🤖 Welcome to Rust CLI Chat!");
+    println!("===================================");
     println!("Using model: {}", config.model);
-    println!("API URL: {}", config.openai_base_url);
+    println!("Connected to API: {}", config.openai_base_url);
+    println!();
+    println!("Type your message and press Enter to chat.");
+    println!("Type 'exit' or 'quit' to end the conversation.");
+    println!("===================================");
+    println!();
+    
+    // Here we'll add the chat loop functionality later
     
     Ok(())
 }
