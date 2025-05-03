@@ -29,7 +29,13 @@ static RUNNING: AtomicBool = AtomicBool::new(true);
 
 // Function to handle clean-up operations
 fn cleanup() {
+    // Ensure we're on a new line before printing goodbye message
     println!("\nGoodbye! Thank you for using Rust CLI Chat.");
+    
+    // Flush stdout to ensure message is displayed
+    if let Err(e) = io::stdout().flush() {
+        eprintln!("Error flushing stdout: {}", e);
+    }
 }
 
 #[tokio::main]
@@ -41,12 +47,31 @@ async fn main() -> Result<()> {
     let running = Arc::new(AtomicBool::new(true));
     let running_clone = running.clone();
     
-    // Spawn a task to handle Ctrl+C
+    // Set up a more robust Ctrl+C handler
     tokio::spawn(async move {
-        if let Ok(()) = ctrl_c().await {
-            println!("\nReceived shutdown signal...");
-            running_clone.store(false, Ordering::SeqCst);
-            RUNNING.store(false, Ordering::SeqCst);
+        // Use a loop to handle multiple Ctrl+C presses
+        loop {
+            if let Ok(()) = ctrl_c().await {
+                // First Ctrl+C: try graceful shutdown
+                if running_clone.load(Ordering::SeqCst) {
+                    println!("\nReceived shutdown signal. Press Ctrl+C again to force exit...");
+                    running_clone.store(false, Ordering::SeqCst);
+                    RUNNING.store(false, Ordering::SeqCst);
+                    
+                    // Start a grace period timer
+                    tokio::spawn(async {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(3000)).await;
+                        println!("\nGraceful shutdown timeout exceeded. Forcing exit...");
+                        cleanup();
+                        std::process::exit(0);
+                    });
+                } else {
+                    // Second Ctrl+C: force immediate exit
+                    println!("\nForcing immediate exit...");
+                    cleanup();
+                    std::process::exit(0);
+                }
+            }
         }
     });
     
@@ -85,7 +110,7 @@ async fn main() -> Result<()> {
     println!();
     
     // Spawn a task to read user input
-    let input_task = tokio::spawn(async move {
+    let _input_task = tokio::spawn(async move {
         // Display initial prompt
         print!("You> ");
         io::stdout().flush().unwrap();
@@ -207,11 +232,11 @@ async fn main() -> Result<()> {
         }
     }
     
-    // Wait for input task to complete
-    let _ = input_task.await;
-    
     // Clean up resources
     cleanup();
+    
+    // No need to await the input task - it will be terminated 
+    // when the process exits
     
     Ok(())
 }
