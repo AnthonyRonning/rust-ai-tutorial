@@ -74,36 +74,44 @@ Let's make sure our app exits properly. We already have the "/exit" command, but
 
 Here are potential future enhancements you can add to this basic chat application:
 
-1. **Conversation Management**
+### Conversation Management
    - Save/load conversations to JSON or Markdown files
    - Continue previous conversations on startup
    - Conversation branching to explore different response paths
    - Chat summarization with a `/summary` command
+   - Conversation templates with pre-defined flows for specific tasks
 
-2. **User Experience**
+### User Experience
    - Command history with up/down arrow navigation (using rustyline)
    - Message editing with `/edit` command to fix your last message
    - Terminal UI with ANSI colors for different speakers
    - Loading spinners during API requests
    - Markdown rendering with syntax highlighting for code blocks
 
-3. **Configuration & Customization**
+### Configuration & Customization
    - Command-line flags using clap (model, temperature, system prompt file)
    - Configuration file support beyond environment variables
    - Provider profiles to switch between OpenAI, Anthropic, Ollama, etc.
    - Multiple chat personas with different system prompts
    - Customizable message templates for common prompts
 
-4. **Advanced Features**
+### Advanced Features
    - Function calling/tool mode to execute local commands
    - Local context injection with `/file` command for including file contents
    - Token usage tracking and cost estimation
    - Streaming rate meter with tokens/second display
    - Automatic error handling and retries for network issues
+   - Prompt chaining for multi-step reasoning pipelines
+   - LLM model comparison by running prompts against multiple models
 
-5. **Extensions**
+### Analytics & Insights
+   - Conversation analytics to identify patterns and topic frequencies
+   - Response quality evaluation metrics
+   - Token usage statistics and cost tracking
+   - Performance benchmarks across different models
+
+### Extensions
    - Embeddings + RAG: Add retrieval from local files to augment prompts
    - Interactive shell mode with command execution and explanation
    - Voice interface with text-to-speech output and speech recognition
    - Plugin architecture for custom extensions
-   - Unit test harness for regression testing and fuzzing
