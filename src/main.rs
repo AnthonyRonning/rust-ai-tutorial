@@ -86,14 +86,14 @@ async fn main() -> Result<()> {
     
     // Spawn a task to read user input
     let input_task = tokio::spawn(async move {
+        // Display initial prompt
+        print!("You> ");
+        io::stdout().flush().unwrap();
+        
         loop {
             if !RUNNING.load(Ordering::SeqCst) {
                 break;
             }
-            
-            // Display prompt and flush to ensure it appears before user input
-            print!("You> ");
-            io::stdout().flush().unwrap();
             
             // Read user input (blocking operation)
             let mut input = String::new();
@@ -110,6 +110,9 @@ async fn main() -> Result<()> {
                     
                     // Skip empty messages
                     if input.is_empty() {
+                        // Show prompt again for empty input
+                        print!("You> ");
+                        io::stdout().flush().unwrap();
                         continue;
                     }
                     
@@ -192,8 +195,10 @@ async fn main() -> Result<()> {
                     conversation_history.push(assistant_message.into());
                 }
                 
-                // New line after the response
+                // New line after the response and display next prompt
                 println!();
+                print!("You> ");
+                io::stdout().flush()?;
             }
             else => {
                 // Channel closed or Ctrl+C was pressed
