@@ -69,3 +69,41 @@ After the AI finishes responding, I need to save its complete message to our con
 ```
 Let's make sure our app exits properly. We already have the "/exit" command, but users also expect Ctrl+C to work. How can we handle keyboard interrupts so the app shuts down gracefully in both cases?
 ```
+
+## Future Tutorial Ideas
+
+Here are potential future enhancements you can add to this basic chat application:
+
+1. **Conversation Management**
+   - Save/load conversations to JSON or Markdown files
+   - Continue previous conversations on startup
+   - Conversation branching to explore different response paths
+   - Chat summarization with a `/summary` command
+
+2. **User Experience**
+   - Command history with up/down arrow navigation (using rustyline)
+   - Message editing with `/edit` command to fix your last message
+   - Terminal UI with ANSI colors for different speakers
+   - Loading spinners during API requests
+   - Markdown rendering with syntax highlighting for code blocks
+
+3. **Configuration & Customization**
+   - Command-line flags using clap (model, temperature, system prompt file)
+   - Configuration file support beyond environment variables
+   - Provider profiles to switch between OpenAI, Anthropic, Ollama, etc.
+   - Multiple chat personas with different system prompts
+   - Customizable message templates for common prompts
+
+4. **Advanced Features**
+   - Function calling/tool mode to execute local commands
+   - Local context injection with `/file` command for including file contents
+   - Token usage tracking and cost estimation
+   - Streaming rate meter with tokens/second display
+   - Automatic error handling and retries for network issues
+
+5. **Extensions**
+   - Embeddings + RAG: Add retrieval from local files to augment prompts
+   - Interactive shell mode with command execution and explanation
+   - Voice interface with text-to-speech output and speech recognition
+   - Plugin architecture for custom extensions
+   - Unit test harness for regression testing and fuzzing
